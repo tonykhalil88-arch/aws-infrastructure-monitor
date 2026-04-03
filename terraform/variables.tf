@@ -15,3 +15,13 @@ variable "environment" {
   type        = string
   default     = "dev"
 }
+
+variable "alert_email" {
+  description = "Email address to send alerts to"
+  type        = string
+}
+variable "billing_threshold" {
+  description = "USD amount to trigger billing alarm"
+  type        = number
+  default     = 10
+}
