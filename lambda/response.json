@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"message\": \"Monitor run complete\", \"timestamp\": \"2026-04-03T12:10:34.098803+00:00\", \"results\": [\"CloudWatch check passed \\u2014 15 Lambda metrics found\", \"Metrics written to DynamoDB successfully\"], \"status\": \"OK\"}"}

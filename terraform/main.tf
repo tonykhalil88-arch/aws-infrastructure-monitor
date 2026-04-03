@@ -150,3 +150,64 @@ resource "aws_iam_role_policy" "lambda_policy" {
     ]
   })
 }
+# ── LAMBDA PACKAGE — Zip the code ────────────────────────────────────────
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../lambda/monitor.py"
+  output_path = "${path.module}/../lambda/monitor.zip"
+}
+
+# ── LAMBDA FUNCTION — Monitor ─────────────────────────────────────────────
+resource "aws_lambda_function" "monitor" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "${var.project_name}-monitor-${var.environment}"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "monitor.lambda_handler"
+  runtime          = "python3.12"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  timeout          = 30
+  memory_size      = 128
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.metrics.name
+      SNS_TOPIC_ARN  = aws_sns_topic.alerts.arn
+      ENVIRONMENT    = var.environment
+    }
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ── CLOUDWATCH RULE — Run every hour ─────────────────────────────────────
+resource "aws_cloudwatch_event_rule" "monitor_schedule" {
+  name                = "${var.project_name}-schedule-${var.environment}"
+  description         = "Trigger monitor Lambda every hour"
+  schedule_expression = "rate(1 hour)"
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# ── EVENTBRIDGE TARGET — Point to Lambda ─────────────────────────────────
+resource "aws_cloudwatch_event_target" "monitor_target" {
+  rule      = aws_cloudwatch_event_rule.monitor_schedule.name
+  target_id = "MonitorLambda"
+  arn       = aws_lambda_function.monitor.arn
+}
+
+# ── LAMBDA PERMISSION — Allow EventBridge to invoke ──────────────────────
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.monitor.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.monitor_schedule.arn
+}
